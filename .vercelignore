@@ -1,0 +1,11 @@
+.git
+.env*
+GMB-*.md
+GMB-INFO.txt
+SOURCES.txt
+site-config.json
+seo-manifest.json
+logo/
+cover-photos/
+business-photos/
+README.md
