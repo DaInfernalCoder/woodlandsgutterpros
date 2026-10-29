@@ -16,6 +16,11 @@ const video = document.querySelector('.hero video');
 const control = document.querySelector('.media-control');
 const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
 let userPaused = false;
+const connection = navigator.connection;
+let startScheduled = false;
+function prefersLessData() {
+  return connection?.saveData || /(^|-)2g$/.test(connection?.effectiveType || '');
+}
 function showVideoState(playing) {
   control.innerHTML = playing
     ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14" fill="none" stroke="currentColor" stroke-width="3"/></svg>'
@@ -32,21 +37,40 @@ function attachVideo() {
     return;
   }
   video.muted = true;
-  video.src = video.dataset.src;
+  video.poster = document.querySelector('.hero-media img')?.currentSrc || '';
+  if (!video.getAttribute('src')) video.src = video.dataset.src;
   control.hidden = false;
-  video.play().catch(() => { showVideoState(false); });
+  if (!document.hidden && !userPaused) video.play().catch(() => { showVideoState(false); });
+}
+function scheduleVideo() {
+  if (!video || !control) return;
+  if (motion.matches) { attachVideo(); return; }
+  // Data-saving visitors keep the poster until they choose Play.
+  if (prefersLessData()) { control.hidden = false; showVideoState(false); return; }
+  if (startScheduled) return;
+  startScheduled = true;
+  const start = () => {
+    startScheduled = false;
+    if (!motion.matches && !prefersLessData()) attachVideo();
+  };
+  const idle = () => {
+    if ('requestIdleCallback' in window) requestIdleCallback(start, { timeout: 1500 });
+    else setTimeout(start, 100);
+  };
+  if (document.readyState === 'complete') idle();
+  else window.addEventListener('load', idle, { once: true });
 }
 if (video && control) {
-  attachVideo();
-  motion.addEventListener('change', attachVideo);
+  scheduleVideo();
+  motion.addEventListener('change', scheduleVideo);
   control.addEventListener('click', () => {
-    if (video.paused) { userPaused = false; video.play().catch(() => {}); }
+    if (video.paused) { userPaused = false; attachVideo(); }
     else { userPaused = true; video.pause(); }
   });
   video.addEventListener('play', () => { showVideoState(true); });
   video.addEventListener('pause', () => { showVideoState(false); });
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) video.pause();
-    else if (!userPaused && !motion.matches) video.play().catch(() => {});
+    else if (!userPaused && !motion.matches && video.getAttribute('src')) video.play().catch(() => {});
   });
 }
